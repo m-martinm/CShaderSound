@@ -22,6 +22,7 @@
 #define RAYGUI_IMPLEMENTATION
 #include "raygui.h"
 #include "style_dark.h"
+#include "queue.h"
 
 // "Settings"
 
@@ -56,7 +57,7 @@ typedef struct ui_struct // Holds information about the UI
   Rectangle music_name_bounds;
   Rectangle button_bounds;
   Rectangle progress_bounds;
-
+  Queue music_queue;
 } UI;
 
 typedef struct audio_struct
@@ -66,6 +67,7 @@ typedef struct audio_struct
                    // data and audio callbacks are a pain in the...
   u32 current_frame;
   bool audio_loaded;
+  bool audio_flag;
 #if USE_FFT
   fcplx fft_buffer[BUFFER_SIZE];
   f32 previous_avg; // Needed for smoothing out the fft
@@ -120,7 +122,9 @@ int main(int argc, char **argv)
   // Initializing Raylib
   const u32 width = 75 * 16;
   const u32 height = 75 * 9;
+#if (DEBUG_MODE == 0)
   SetTraceLogLevel(LOG_ERROR | LOG_FATAL | LOG_WARNING);
+#endif
   SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT);
   InitWindow(width, height, "CShaderSound");
   SetWindowMinSize(640, 480);
@@ -128,11 +132,14 @@ int main(int argc, char **argv)
   InitAudioDevice();
   SetTargetFPS(GetMonitorRefreshRate(GetCurrentMonitor()));
   GuiLoadStyleDark();
+  Font font = LoadFontEx("anita_semi_square.ttf", 28, NULL, 0);
+  GuiSetFont(font);
   GuiSetStyle(DEFAULT, TEXT_SIZE, 28);
   GuiSetStyle(LABEL, TEXT_ALIGNMENT, TEXT_ALIGN_CENTER);
   GuiSetIconScale(2);
 
   // Initializing the UI struct
+  queue_init(&ui.music_queue);
   ui.window_size = (Vector2){.x = (f32)width, .y = (f32)height};
   ui.canvas_bounds = (Rectangle){.x = 0, .y = 0, .width = ui.window_size.x, .height = ui.window_size.y * 0.8};
   ui.music_name_bounds = (Rectangle){.x = 0, .y = ui.window_size.y * 0.8, .width = ui.window_size.x, .height = ui.window_size.y * 0.1};
@@ -176,7 +183,7 @@ int main(int argc, char **argv)
   {
     audio.audio_loaded = false;
     fprintf(stderr, "You didn't provide a file to load.\n"
-    "You can simply drop one onto the window or provide it as an argument.\n");
+                    "You can simply drop one onto the window or provide it as an argument.\n");
   }
 
 #if DEBUG_MODE
@@ -218,6 +225,16 @@ int main(int argc, char **argv)
       toggle_music_playing();
     }
 
+    if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) // Sliding the music stream
+    {
+      Vector2 m_pos = GetMousePosition();
+      if (CheckCollisionPointRec(m_pos, ui.progress_bounds))
+      {
+        float pos_in_secs = Remap(m_pos.x - ui.progress_bounds.x, 0.0f, ui.progress_bounds.width, 0.0f, GetMusicTimeLength(audio.music));
+        SeekMusicStream(audio.music, pos_in_secs);
+      }
+    }
+
     if (IsWindowResized())
     {
       ui.window_size.x = (f32)GetRenderWidth();
@@ -237,6 +254,27 @@ int main(int argc, char **argv)
     {
 
       UpdateMusicStream(audio.music);
+      if (FloatEquals(0.0f, GetMusicTimePlayed(audio.music)) && audio.audio_flag)
+      {
+
+        if (!queue_is_empty(&ui.music_queue))
+        {
+
+          char *data = dequeue(&ui.music_queue);
+          load_audio(data);
+          free(data);
+        }
+        else
+        {
+
+          PlayMusicStream(audio.music);
+        }
+      }
+      else if (FloatEquals(0.0f, GetMusicTimePlayed(audio.music)) && !audio.audio_flag)
+      {
+
+        audio.audio_flag = true;
+      }
 
       audio.current_frame = GetMusicFramesPlayed(audio.music); // Custom function in raylib, the next line should produce the same value
                                                                // audio.current_frame = GetMusicTimePlayed(audio.music) * audio.music.stream.sampleRate;
@@ -265,12 +303,13 @@ int main(int argc, char **argv)
     {
       BeginDrawing();
       ClearBackground(GetColor(GuiGetStyle(DEFAULT, BACKGROUND_COLOR)));
-      GuiDrawText("To start playing a music,\nsimply drop the file into this window!\n", ui.canvas_bounds, TEXT_ALIGN_CENTER, WHITE);
+      GuiDrawText("To start playing a music,\nsimply drop the file onto this window!\n", ui.canvas_bounds, TEXT_ALIGN_MIDDLE, RAYWHITE);
       EndDrawing();
     }
   }
 
   UnloadMusicStream(audio.music);
+  UnloadFont(font);
   free(audio.music_data);
   CloseAudioDevice();
   CloseWindow();
@@ -282,7 +321,6 @@ int main(int argc, char **argv)
 void load_audio(const char *file_path)
 {
   audio.audio_loaded = false;
-
   ui.music_name = GetFileNameWithoutExt(file_path);
   if (IsMusicReady(audio.music))
   {
@@ -293,6 +331,8 @@ void load_audio(const char *file_path)
     free(audio.music_data);
   }
   audio.music = LoadMusicStream(file_path);
+  audio.music.looping = false;
+
   Wave tmp = LoadWave(file_path);
   audio.music_data = load_wave_frames(tmp);
   UnloadWave(tmp);
@@ -300,6 +340,7 @@ void load_audio(const char *file_path)
   { // Wait for music to be initialized
   }
   audio.audio_loaded = true;
+  audio.audio_flag = false;
   audio.current_frame = 0;
   PlayMusicStream(audio.music);
 }
@@ -338,8 +379,8 @@ void ui_draw()
   {
     toggle_music_playing();
   }
-  float progress = (float)audio.current_frame;
-  GuiProgressBar(ui.progress_bounds, NULL, NULL, &progress, 0.0f, (float)audio.music.frameCount); // TODO: Change this to some kind of a slider.
+  f32 progress = (f32)audio.current_frame;
+  GuiSlider(ui.progress_bounds, NULL, NULL, &progress, 0.0f, (float)audio.music.frameCount); // TODO: Change this to some kind of a slider.
 
 #if DEBUG_MODE
   DrawRectangleLinesEx(ui.canvas_bounds, 1.0f, YELLOW);
@@ -357,21 +398,25 @@ void toggle_music_playing()
     ResumeMusicStream(audio.music);
 }
 
-// Checks if a file is dropped and loads it.
-// TODO: implement a queue, now it can only handle one dropped file
-// and ignores the others.
+// Checks if files are dropped and loads the first one if there is no music playing.
 void check_dropped_files()
 {
   if (IsFileDropped())
   {
     FilePathList fp = LoadDroppedFiles();
-    if (fp.count > 1)
+    for (i32 i = 0; i < fp.count; i++)
     {
-      fprintf(stderr, "Too many files dropped, queue is not yet implemented!\n"
-                      "Loading only the first dropped file.\n");
+      enqueue(&ui.music_queue, fp.paths[i]);
     }
-    load_audio(fp.paths[0]);
+
+    if (!IsMusicReady(audio.music))
+    {
+      char *data = dequeue(&ui.music_queue);
+      load_audio(data);
+      free(data);
+    }
     UnloadDroppedFiles(fp);
+    queue_print(&ui.music_queue);
   }
 }
 
