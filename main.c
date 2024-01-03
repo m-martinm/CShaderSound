@@ -57,6 +57,7 @@ typedef struct ui_struct // Holds information about the UI
   Rectangle music_name_bounds;
   Rectangle button_bounds;
   Rectangle progress_bounds;
+  Rectangle skip_bounds;
   Queue music_queue;
 } UI;
 
@@ -144,7 +145,8 @@ int main(int argc, char **argv)
   ui.canvas_bounds = (Rectangle){.x = 0, .y = 0, .width = ui.window_size.x, .height = ui.window_size.y * 0.8};
   ui.music_name_bounds = (Rectangle){.x = 0, .y = ui.window_size.y * 0.8, .width = ui.window_size.x, .height = ui.window_size.y * 0.1};
   ui.button_bounds = (Rectangle){.x = 0, .y = ui.window_size.y * 0.9, .width = 0.1 * ui.window_size.x, .height = ui.window_size.y * 0.1};
-  ui.progress_bounds = (Rectangle){.x = 0.1 * ui.window_size.x, .y = ui.window_size.y * 0.9, .width = ui.window_size.x * 0.9, .height = ui.window_size.y * 0.1};
+  ui.progress_bounds = (Rectangle){.x = 0.2 * ui.window_size.x, .y = ui.window_size.y * 0.9, .width = ui.window_size.x * 0.8, .height = ui.window_size.y * 0.1};
+  ui.skip_bounds = (Rectangle){.x = 0.1 * ui.window_size.x, .y = ui.window_size.y * 0.9, .width = ui.window_size.x * 0.1, .height = ui.window_size.y * 0.1};
   Image tmp = GenImageColor(ui.canvas_bounds.width, ui.canvas_bounds.height, BLANK);
   ui.canvas = LoadTextureFromImage(tmp);
   UnloadImage(tmp);
@@ -242,7 +244,8 @@ int main(int argc, char **argv)
       ui.canvas_bounds = (Rectangle){.x = 0, .y = 0, .width = ui.window_size.x, .height = ui.window_size.y * 0.8};
       ui.music_name_bounds = (Rectangle){.x = 0, .y = ui.window_size.y * 0.8, .width = ui.window_size.x, .height = ui.window_size.y * 0.1};
       ui.button_bounds = (Rectangle){.x = 0, .y = ui.window_size.y * 0.9, .width = 0.1 * ui.window_size.x, .height = ui.window_size.y * 0.1};
-      ui.progress_bounds = (Rectangle){.x = 0.1 * ui.window_size.x, .y = ui.window_size.y * 0.9, .width = ui.window_size.x * 0.9, .height = ui.window_size.y * 0.1};
+      ui.progress_bounds = (Rectangle){.x = 0.2 * ui.window_size.x, .y = ui.window_size.y * 0.9, .width = ui.window_size.x * 0.8, .height = ui.window_size.y * 0.1};
+      ui.skip_bounds = (Rectangle){.x = 0.1 * ui.window_size.x, .y = ui.window_size.y * 0.9, .width = ui.window_size.x * 0.1, .height = ui.window_size.y * 0.1};
       UnloadTexture(ui.canvas);
       Image tmp = GenImageColor(ui.canvas_bounds.width, ui.canvas_bounds.height, BLANK);
       ui.canvas = LoadTextureFromImage(tmp);
@@ -378,6 +381,20 @@ void ui_draw()
   if (GuiButton(ui.button_bounds, bt_text))
   {
     toggle_music_playing();
+  }
+  if (GuiButton(ui.skip_bounds, GuiIconText(ICON_PLAYER_NEXT, "")))
+  {
+    if (!queue_is_empty(&ui.music_queue))
+    {
+
+      char *data = dequeue(&ui.music_queue);
+      load_audio(data);
+      free(data);
+    }
+    else
+    {
+      fprintf(stderr, "Couldn't skip song, because the queue is empty!\n");
+    }
   }
   f32 progress = (f32)audio.current_frame;
   GuiSlider(ui.progress_bounds, NULL, NULL, &progress, 0.0f, (float)audio.music.frameCount); // TODO: Change this to some kind of a slider.
