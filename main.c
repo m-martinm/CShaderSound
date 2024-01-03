@@ -1,7 +1,7 @@
 /* Some known issues and limitations
- * - BUFFER_SIZE should be scaled with the music sample rate and the TARGET_FPS during runtime
+ * - BUFFER_SIZE should be scaled with the music sample rate and the fps during runtime
  *   but shader arrays require a fixed length. We could solve this with using a bigger buffer size
- *   and padding the not used slots in the array with zeros, but then we need another uniforms
+ *   and padding the not used slots in the array with zeros, but then we need another uniform
  *   for telling the shader the current usable size of the array/buffer. This would cause I think
  *   unnecessary complexity with little improvement in quality.
  * - For now it only supports stereo audio files with 8/16/32 bit sample size.
@@ -10,9 +10,7 @@
  * - I use a function called GetMusicFramesPlayed() in raylib.h but it can be replaced with:
  *   GetMusicTimePlayed(Music music) * music.stream.sampleRate;
  * - I think the fft part is not working on MAC because it doesn't support complex floats
- *
  */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -28,9 +26,9 @@
 // "Settings"
 
 #define DEBUG_MODE 0
-#define SHIFT_FFT 1     // Shift the zero-frequency component to the center of the spectrum.
-#define USE_FFT 1       // Calculate the short time fft of the audio and send it to the shader, either use this or the USE_AMP, but not both.
-#define USE_AMP 0       // Just calculate the "mono" amplitude of the audio and send it to the shader.
+#define SHIFT_FFT 1     // Shift the zero-frequency component to the center of the spectrum. If using FFT
+#define USE_FFT 0       // Calculate the short time fft of the audio and send it to the shader, either use this or the USE_AMP, but not both.
+#define USE_AMP 1       // Just calculate the "mono" amplitude of the audio and send it to the shader.
 #define BUFFER_SIZE 512 // Should be equal in the shader also, which receives the buffer
 #if (USE_FFT == 1) && (USE_AMP == 1)
 #error "Both USE_FFT and USE_AMP cannot be defined as 1 at the same time."
@@ -106,6 +104,7 @@ static void check_dropped_files();
 static void send_shader_uniforms();
 static void ui_draw();
 static void toggle_music_playing();
+static void check_dropped_files();
 #if USE_FFT
 static void load_fft_buffer();
 static void fft();
@@ -121,7 +120,8 @@ int main(int argc, char **argv)
   // Initializing Raylib
   const u32 width = 75 * 16;
   const u32 height = 75 * 9;
-  SetConfigFlags(FLAG_WINDOW_RESIZABLE);
+  SetTraceLogLevel(LOG_ERROR | LOG_FATAL | LOG_WARNING);
+  SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT);
   InitWindow(width, height, "CShaderSound");
   SetWindowMinSize(640, 480);
   SetWindowIcon(LoadImage("icon.png"));
@@ -175,6 +175,8 @@ int main(int argc, char **argv)
   else
   {
     audio.audio_loaded = false;
+    fprintf(stderr, "You didn't provide a file to load.\n"
+    "You can simply drop one onto the window or provide it as an argument.\n");
   }
 
 #if DEBUG_MODE
@@ -192,6 +194,8 @@ int main(int argc, char **argv)
   // Main loop
   while (!WindowShouldClose())
   {
+
+    check_dropped_files();
 
     if (IsKeyPressed(KEY_R))
     {
@@ -335,7 +339,7 @@ void ui_draw()
     toggle_music_playing();
   }
   float progress = (float)audio.current_frame;
-  GuiProgressBar(ui.progress_bounds, NULL, NULL, &progress, 0.0f, (float)audio.music.frameCount);
+  GuiProgressBar(ui.progress_bounds, NULL, NULL, &progress, 0.0f, (float)audio.music.frameCount); // TODO: Change this to some kind of a slider.
 
 #if DEBUG_MODE
   DrawRectangleLinesEx(ui.canvas_bounds, 1.0f, YELLOW);
@@ -351,6 +355,24 @@ void toggle_music_playing()
     PauseMusicStream(audio.music);
   else
     ResumeMusicStream(audio.music);
+}
+
+// Checks if a file is dropped and loads it.
+// TODO: implement a queue, now it can only handle one dropped file
+// and ignores the others.
+void check_dropped_files()
+{
+  if (IsFileDropped())
+  {
+    FilePathList fp = LoadDroppedFiles();
+    if (fp.count > 1)
+    {
+      fprintf(stderr, "Too many files dropped, queue is not yet implemented!\n"
+                      "Loading only the first dropped file.\n");
+    }
+    load_audio(fp.paths[0]);
+    UnloadDroppedFiles(fp);
+  }
 }
 
 #if USE_FFT
