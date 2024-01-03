@@ -23,4 +23,4 @@ Or simply run the program and drag-and-drop a music file.
 - Drop an audio file onto the window to load it.
 
 ---
-This is a small project has been inspired by [@Tsoding](https://github.com/tsoding/musializer) and [ShaderToys](https://www.shadertoy.com/).
+This is small project has been inspired by [@Tsoding](https://github.com/tsoding/musializer) and [ShaderToys](https://www.shadertoy.com/).
