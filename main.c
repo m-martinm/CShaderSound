@@ -44,7 +44,6 @@ typedef float complex fcplx;
 typedef float f32;
 typedef unsigned int u32;
 typedef int i32;
-
 // Structs
 
 typedef struct ui_struct // Holds information about the UI
@@ -55,9 +54,12 @@ typedef struct ui_struct // Holds information about the UI
   char *music_name;
   Rectangle canvas_bounds;
   Rectangle music_name_bounds;
-  Rectangle button_bounds;
+  Rectangle stop_play_bounds;
   Rectangle progress_bounds;
   Rectangle skip_bounds;
+  Rectangle volume_hover_bounds;
+  Rectangle volume_slider_bounds;
+  bool volume_hovered;
   Queue music_queue;
 } UI;
 
@@ -81,9 +83,9 @@ typedef struct shader_uniforms_struct
   f32 u_time;
   Vector2 u_resolution;
 
-  int u_buffer_loc;
-  int u_time_loc;
-  int u_resolution_loc;
+  i32 u_buffer_loc;
+  i32 u_time_loc;
+  i32 u_resolution_loc;
 } ShaderUniforms;
 
 // Some MACROS
@@ -102,7 +104,7 @@ static ShaderUniforms shader_uniforms;
 
 // Module functions
 static void load_audio(const char *file_path);
-static float *load_wave_frames();
+static f32 *load_wave_frames();
 static void check_dropped_files();
 static void send_shader_uniforms();
 static void ui_draw();
@@ -144,9 +146,11 @@ int main(int argc, char **argv)
   ui.window_size = (Vector2){.x = (f32)width, .y = (f32)height};
   ui.canvas_bounds = (Rectangle){.x = 0, .y = 0, .width = ui.window_size.x, .height = ui.window_size.y * 0.8};
   ui.music_name_bounds = (Rectangle){.x = 0, .y = ui.window_size.y * 0.8, .width = ui.window_size.x, .height = ui.window_size.y * 0.1};
-  ui.button_bounds = (Rectangle){.x = 0, .y = ui.window_size.y * 0.9, .width = 0.1 * ui.window_size.x, .height = ui.window_size.y * 0.1};
+  ui.stop_play_bounds = (Rectangle){.x = 0, .y = ui.window_size.y * 0.9, .width = 0.1 * ui.window_size.x, .height = ui.window_size.y * 0.1};
   ui.progress_bounds = (Rectangle){.x = 0.2 * ui.window_size.x, .y = ui.window_size.y * 0.9, .width = ui.window_size.x * 0.8, .height = ui.window_size.y * 0.1};
   ui.skip_bounds = (Rectangle){.x = 0.1 * ui.window_size.x, .y = ui.window_size.y * 0.9, .width = ui.window_size.x * 0.1, .height = ui.window_size.y * 0.1};
+  ui.volume_hover_bounds = (Rectangle){.x = 10.0, .y = 10.0, .width = 50.0, .height = 50.0};
+  ui.volume_slider_bounds = (Rectangle){.x = 10.0, .y = 10.0, .width = 200.0, .height = 50.0};
   Image tmp = GenImageColor(ui.canvas_bounds.width, ui.canvas_bounds.height, BLANK);
   ui.canvas = LoadTextureFromImage(tmp);
   UnloadImage(tmp);
@@ -189,11 +193,11 @@ int main(int argc, char **argv)
   }
 
 #if DEBUG_MODE
-  load_audio("assets/colee_szellem.mp3");
+  load_audio("songs/lens.mp3");
 #endif
 
 #if USE_FFT
-  for (int i = 0; i < BUFFER_SIZE; ++i) // Maybe also memset() would work not sure
+  for (i32 i = 0; i < BUFFER_SIZE; ++i) // Maybe also memset() would work not sure
   {
     audio.fft_buffer[i] = 0.0f + 0.0f * I;
   }
@@ -227,12 +231,12 @@ int main(int argc, char **argv)
       toggle_music_playing();
     }
 
-    if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) // Sliding the music stream
+    Vector2 m_pos = GetMousePosition();
+    if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) // Sliding the music stream (Not using the sliders value because it messier that way)
     {
-      Vector2 m_pos = GetMousePosition();
       if (CheckCollisionPointRec(m_pos, ui.progress_bounds))
       {
-        float pos_in_secs = Remap(m_pos.x - ui.progress_bounds.x, 0.0f, ui.progress_bounds.width, 0.0f, GetMusicTimeLength(audio.music));
+        f32 pos_in_secs = Remap(m_pos.x - ui.progress_bounds.x, 0.0f, ui.progress_bounds.width, 0.0f, GetMusicTimeLength(audio.music));
         SeekMusicStream(audio.music, pos_in_secs);
       }
     }
@@ -243,7 +247,7 @@ int main(int argc, char **argv)
       ui.window_size.y = (f32)GetRenderHeight();
       ui.canvas_bounds = (Rectangle){.x = 0, .y = 0, .width = ui.window_size.x, .height = ui.window_size.y * 0.8};
       ui.music_name_bounds = (Rectangle){.x = 0, .y = ui.window_size.y * 0.8, .width = ui.window_size.x, .height = ui.window_size.y * 0.1};
-      ui.button_bounds = (Rectangle){.x = 0, .y = ui.window_size.y * 0.9, .width = 0.1 * ui.window_size.x, .height = ui.window_size.y * 0.1};
+      ui.stop_play_bounds = (Rectangle){.x = 0, .y = ui.window_size.y * 0.9, .width = 0.1 * ui.window_size.x, .height = ui.window_size.y * 0.1};
       ui.progress_bounds = (Rectangle){.x = 0.2 * ui.window_size.x, .y = ui.window_size.y * 0.9, .width = ui.window_size.x * 0.8, .height = ui.window_size.y * 0.1};
       ui.skip_bounds = (Rectangle){.x = 0.1 * ui.window_size.x, .y = ui.window_size.y * 0.9, .width = ui.window_size.x * 0.1, .height = ui.window_size.y * 0.1};
       UnloadTexture(ui.canvas);
@@ -255,6 +259,14 @@ int main(int argc, char **argv)
 
     if (audio.audio_loaded) // If we have a loaded music file
     {
+      if (CheckCollisionPointRec(m_pos, ui.volume_hover_bounds) && !ui.volume_hovered)
+      {
+        ui.volume_hovered = true;
+      }
+      else if (!CheckCollisionPointRec(m_pos, ui.volume_slider_bounds) && ui.volume_hovered)
+      {
+        ui.volume_hovered = false;
+      }
 
       UpdateMusicStream(audio.music);
       if (FloatEquals(0.0f, GetMusicTimePlayed(audio.music)) && audio.audio_flag)
@@ -279,7 +291,7 @@ int main(int argc, char **argv)
         audio.audio_flag = true;
       }
 
-      audio.current_frame = GetMusicTimePlayed(audio.music) * audio.music.stream.sampleRate; 
+      audio.current_frame = GetMusicTimePlayed(audio.music) * audio.music.stream.sampleRate;
 
 #if USE_FFT
       load_fft_buffer();
@@ -348,7 +360,7 @@ void load_audio(const char *file_path)
 }
 
 // Wrapper around LoadWaveSamples()
-float *load_wave_frames(Wave w)
+f32 *load_wave_frames(Wave w)
 {
   f32 *tmp = LoadWaveSamples(w);
   f32 *ret = (f32 *)malloc(sizeof(f32) * w.frameCount);
@@ -377,7 +389,7 @@ void ui_draw()
 {
   GuiLabel(ui.music_name_bounds, ui.music_name);
   const char *bt_text = TextFormat("#%d#", IsMusicStreamPlaying(audio.music) ? ICON_PLAYER_PAUSE : ICON_PLAYER_PLAY);
-  if (GuiButton(ui.button_bounds, bt_text))
+  if (GuiButton(ui.stop_play_bounds, bt_text))
   {
     toggle_music_playing();
   }
@@ -395,14 +407,26 @@ void ui_draw()
       fprintf(stderr, "Couldn't skip song, because the queue is empty!\n");
     }
   }
-  f32 progress = (f32)audio.current_frame;
-  GuiSlider(ui.progress_bounds, NULL, NULL, &progress, 0.0f, (float)audio.music.frameCount); // TODO: Change this to some kind of a slider.
+  f32 progress = GetMusicTimePlayed(audio.music);
+  GuiSlider(ui.progress_bounds, NULL, NULL, &progress, 0.0f, GetMusicTimeLength(audio.music));
+  if (!ui.volume_hovered)
+  {
+    GuiButton(ui.volume_hover_bounds, GuiIconText(ICON_AUDIO, ""));
+  }
+  else
+  {
+    f32 vol = GetMasterVolume();
+    GuiSlider(ui.volume_slider_bounds, NULL, NULL, &vol, 0.0f, 1.0f);
+    SetMasterVolume(vol);
+  }
 
 #if DEBUG_MODE
   DrawRectangleLinesEx(ui.canvas_bounds, 1.0f, YELLOW);
   DrawRectangleLinesEx(ui.music_name_bounds, 1.0f, YELLOW);
-  DrawRectangleLinesEx(ui.button_bounds, 1.0f, YELLOW);
+  DrawRectangleLinesEx(ui.stop_play_bounds, 1.0f, YELLOW);
   DrawRectangleLinesEx(ui.progress_bounds, 1.0f, YELLOW);
+  DrawRectangleLinesEx(ui.skip_bounds, 1.0f, YELLOW);
+  DrawRectangleLinesEx(ui.volume_hover_bounds, 1.0f, YELLOW);
 #endif
 }
 
@@ -467,7 +491,7 @@ void _fft(fcplx *buf, fcplx *out, u32 n, u32 step)
     _fft(out, buf, n, step * 2);
     _fft(out + step, buf + step, n, step * 2);
 
-    for (int i = 0; i < n; i += 2 * step)
+    for (i32 i = 0; i < n; i += 2 * step)
     {
       fcplx t = cexpf(-I * PI * i / n) * out[i + step];
       buf[i / 2] = out[i] + t;
@@ -480,7 +504,7 @@ void _fft(fcplx *buf, fcplx *out, u32 n, u32 step)
 void fft()
 {
   fcplx out[BUFFER_SIZE]; // Could be dynamically allocated but with small buffer sizes it should work
-  for (int i = 0; i < BUFFER_SIZE; ++i)
+  for (i32 i = 0; i < BUFFER_SIZE; ++i)
   {
     out[i] = audio.fft_buffer[i];
   }
@@ -493,12 +517,12 @@ void fftshift(f32 *data)
   f32 temp[BUFFER_SIZE];
   u32 shift = BUFFER_SIZE / 2;
 
-  for (int i = 0; i < BUFFER_SIZE; i++)
+  for (i32 i = 0; i < BUFFER_SIZE; i++)
   {
     temp[(i + shift) % BUFFER_SIZE] = data[i];
   }
 
-  for (int i = 0; i < BUFFER_SIZE; i++)
+  for (i32 i = 0; i < BUFFER_SIZE; i++)
   {
     data[i] = temp[i];
   }
