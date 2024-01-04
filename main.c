@@ -4,11 +4,6 @@
  *   and padding the not used slots in the array with zeros, but then we need another uniform
  *   for telling the shader the current usable size of the array/buffer. This would cause I think
  *   unnecessary complexity with little improvement in quality.
- * - For now it only supports stereo audio files with 8/16/32 bit sample size.
- *   Also I might be wrong but raylib converts 24 bit audio files internally to 16 bit so it might
- *   be also supported. [Might be solved, now it supports every audio file that raylib can handle]
- * - I use a function called GetMusicFramesPlayed() in raylib.h but it can be replaced with:
- *   GetMusicTimePlayed(Music music) * music.stream.sampleRate;
  * - I think the fft part is not working on MAC because it doesn't support complex floats
  */
 #include <stdio.h>
