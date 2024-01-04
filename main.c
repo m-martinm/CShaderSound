@@ -279,8 +279,7 @@ int main(int argc, char **argv)
         audio.audio_flag = true;
       }
 
-      audio.current_frame = GetMusicFramesPlayed(audio.music); // Custom function in raylib, the next line should produce the same value
-                                                               // audio.current_frame = GetMusicTimePlayed(audio.music) * audio.music.stream.sampleRate;
+      audio.current_frame = GetMusicTimePlayed(audio.music) * audio.music.stream.sampleRate; 
 
 #if USE_FFT
       load_fft_buffer();
@@ -360,7 +359,7 @@ float *load_wave_frames(Wave w)
     {
       amp += tmp[w.channels * i + ch] / w.channels;
     }
-    ret[i] = amp;
+    ret[i] = Remap(amp, -1.0f, 1.0f, 0.0f, 1.0f); // Remapping the values to be consistent with the fft
   }
   UnloadWaveSamples(tmp);
   return ret;

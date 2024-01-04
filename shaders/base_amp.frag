@@ -24,7 +24,7 @@ float remap(float value, float omin, float omax, float nmin, float nmax) {
 }
 
 float fetch_buffer(const vec2 pos) {
-  float idx = remap(pos.x, 0.0, 1.0, 0.0, BUFFER_SIZE - 0.1); // Change this remapping 
+  float idx = remap(pos.x, 0.0, 1.0, 0.0, BUFFER_SIZE - 0.01); // Change this remapping 
   float val1 = uBuffer[int(floor(idx))];
   float val2 = uBuffer[int(ceil(idx))];
   return mix(val1, val2, idx - trunc(idx));
@@ -35,7 +35,7 @@ float squared(float value) {
 }
 
 float getAmp(float frequency) {
-  float idx = remap(frequency, 0.0, 500.0, 0.0, BUFFER_SIZE - 0.1);
+  float idx = remap(frequency, 0.0, 512.0, 0.0, BUFFER_SIZE - 0.01);
   float val1 = uBuffer[int(floor(idx))];
   float val2 = uBuffer[int(ceil(idx))];
   return mix(val1, val2, idx - trunc(idx));
