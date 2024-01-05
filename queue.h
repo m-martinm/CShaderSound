@@ -65,7 +65,6 @@ char *dequeue(Queue *q)
     return NULL; // Return NULL to indicate an error
   }
   char *data = q->front->data;
-
   Node *tmp = q->front;
   q->front = q->front->next;
 
@@ -95,7 +94,7 @@ void queue_print(Queue *q)
     printf("The queue is empty!\n");
     return;
   }
-  printf("Queue elements:\n");
+  printf("Queued songs:\n");
   Node *current = q->front;
   while (current != NULL)
   {
