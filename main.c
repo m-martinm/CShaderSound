@@ -114,7 +114,7 @@ int main(int argc, char **argv)
 #if (DEBUG_MODE == 0)
   SetTraceLogLevel(LOG_ERROR | LOG_FATAL | LOG_WARNING);
 #endif
-  SetConfigFlags(FLAG_WINDOW_RESIZABLE);
+  SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT); 
   InitWindow(width, height, "CShaderSound");
   SetWindowMinSize(640, 480);
   SetWindowIcon(LoadImage("icon.png"));
@@ -125,7 +125,7 @@ int main(int argc, char **argv)
   Font font = LoadFontEx("anita_semi_square.ttf", 28, NULL, 0);
   GuiSetFont(font);
   GuiSetStyle(DEFAULT, TEXT_SIZE, 28);
-  GuiSetStyle(LABEL, TEXT_ALIGNMENT, TEXT_ALIGN_CENTER);
+  GuiSetStyle(LABEL, TEXT_ALIGNMENT, TEXT_ALIGN_CENTER); 
   GuiSetIconScale(2);
 
   // Initializing the UI struct
@@ -157,7 +157,8 @@ int main(int argc, char **argv)
   shader_uniforms.u_time = 0.0f;
   Image temp = GenImageColor(BUFFER_SIZE, 1, BLANK); // 512 is the buffer length and height 1: .r/.x is the fft and .g/.y is the amplitude
   shader_uniforms.u_buffer = LoadTextureFromImage(temp);
-  SetTextureFilter(shader_uniforms.u_buffer, TEXTURE_FILTER_POINT);
+  SetTextureFilter(shader_uniforms.u_buffer, TEXTURE_FILTER_BILINEAR); // Linear filtering
+  SetTextureWrap(shader_uniforms.u_buffer, TEXTURE_WRAP_CLAMP);
   UnloadImage(temp);
   shader_uniforms.u_resolution = (Vector2){.x = ui.canvas_bounds.width, .y = ui.canvas_bounds.height};
 

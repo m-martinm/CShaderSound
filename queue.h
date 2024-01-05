@@ -1,9 +1,19 @@
 #pragma once
-#define __STDC_ALLOC_LIB__ // see: https://en.cppreference.com/w/c/experimental/dynamic/strdup
-#define __STDC_WANT_LIB_EXT2__ 1 
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+
+// https://stackoverflow.com/questions/252782/strdup-what-does-it-do-in-c
+// copied from here because strdup only works on some systems
+char *strdup(const char *src)
+{
+  size_t len = strlen(src) + 1;
+  char *dst = malloc(len);
+  if (dst == NULL)
+    return NULL;
+  memcpy(dst, src, len);
+  return dst;
+}
 
 typedef struct node_s
 {
@@ -17,7 +27,7 @@ typedef struct queue_s
   Node *rear;
 } Queue;
 
-void queue_init(Queue *q) 
+void queue_init(Queue *q)
 {
   q->front = q->rear = NULL;
 }
@@ -40,7 +50,7 @@ void enqueue(Queue *q, const char *data)
   if (!new_node->data)
   {
     fprintf(stderr, "ERROR: Memory allocation failed\n");
-    free(new_node); 
+    free(new_node);
     return;
   }
   new_node->next = NULL;
@@ -73,7 +83,7 @@ char *dequeue(Queue *q)
     q->rear = NULL;
   }
 
-  free(tmp);  // Free the memory of the dequeued node
+  free(tmp);   // Free the memory of the dequeued node
   return data; // Return the data pointer before freeing the string memory
 }
 
@@ -85,7 +95,6 @@ void queue_destroy(Queue *q)
     free(data); // Free the memory of each string
   }
 }
-
 
 void queue_print(Queue *q)
 {
