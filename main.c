@@ -21,7 +21,7 @@
 
 // "Settings"
 
-#define DEBUG_MODE 0
+#define DEBUG_MODE 1
 #define BUFFER_SIZE 512
 #ifndef PI
 #define PI 3.14159265358979323846f
@@ -62,7 +62,6 @@ typedef struct audio_struct
   bool audio_loaded;
   i32 audio_flag; // We need this flag to know when an audio is over
   fcplx fft_buffer[BUFFER_SIZE];
-  f32 previous_avg; // Needed for smoothing out the fft
 } Audio;
 
 typedef struct shader_uniforms_struct
@@ -142,7 +141,7 @@ int main(int argc, char **argv)
   ui.canvas = LoadTextureFromImage(tmp);
   UnloadImage(tmp);
 
-  ui.shader = LoadShader(0, "shaders/test.frag");
+  ui.shader = LoadShader(0, "shaders/test2.frag");
 
   /*
     uniform vec2 uResolution;
@@ -168,9 +167,8 @@ int main(int argc, char **argv)
   {
     audio.fft_buffer[i] = 0.0f + 0.0f * I;
   }
-  audio.previous_avg = 0.0f;
 #if DEBUG_MODE
-  load_audio("songs/lens.mp3");
+  load_audio("songs/most_geometric_person.mp3");
 #endif
 
   // Main loop
@@ -277,7 +275,7 @@ int main(int argc, char **argv)
 void reload_shader()
 {
   UnloadShader(ui.shader);
-  ui.shader = LoadShader(0, "shaders/test.frag");
+  ui.shader = LoadShader(0, "shaders/test2.frag");
   shader_uniforms.u_buffer_loc = GetShaderLocation(ui.shader, "uBuffer");
   shader_uniforms.u_resolution_loc = GetShaderLocation(ui.shader, "uResolution");
   shader_uniforms.u_time_loc = GetShaderLocation(ui.shader, "uTime");
@@ -445,7 +443,7 @@ void load_audio_buffers()
   i32 cnt = 0;
   for (u32 i = first_frame; i < n; i++)
   {
-    audio.fft_buffer[cnt] = audio.music_data[i] + 0.0f * I;
+    audio.fft_buffer[cnt] = (audio.music_data[i] + 0.0f * I) * powf(sinf(PI*i/BUFFER_SIZE), 2.0f); // TODO Use a window function
     unsigned char val = (unsigned char)Remap(audio.music_data[i], 0.0, 1.0, 0.0, 255.0);
     audio.pixel_buffer[cnt] = (Color){.r = (unsigned char)0, .g = val, .b = (unsigned char)0, .a = (unsigned char)0};
     cnt++;
@@ -496,18 +494,11 @@ void fft_postprocess()
       min_value = magnitude;
     }
   }
-  f32 avg = 0;
   for (u32 i = 0; i < BUFFER_SIZE; ++i)
   {
-    // Mapping the dB values between 0 and 1
-    // Avoid division by zero
-    f32 divisor = (max_value - min_value) != 0.0f ? (max_value - min_value) : 1.0f;
-    f32 tmp = (c2dB(audio.fft_buffer[i]) - min_value) / divisor;
-    // Avariging with the previous avg, it says in the same range, but it helps with the flickering between frames (tmp + audio.previous_avg) / 2.0
-    unsigned char val = (unsigned char)Remap(tmp, 0.0, 1.0, 0.0, 255.0);
+    float tmp = c2dB(audio.fft_buffer[i]);
+    unsigned char val = (unsigned char)Remap(tmp, min_value, max_value, 0.0, 255.0);
     audio.pixel_buffer[i] = (Color){.r = val, .g = audio.pixel_buffer[i].g, .b = (unsigned char)0, .a = (unsigned char)0};
-    avg += tmp / BUFFER_SIZE;
   }
-  audio.previous_avg = avg;
   UpdateTexture(shader_uniforms.u_buffer, audio.pixel_buffer);
 }
