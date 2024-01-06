@@ -21,7 +21,8 @@
 
 // "Settings"
 
-#define DEBUG_MODE 1
+#define DEBUG_MODE 0
+#define UPDATE_INTERVAL 1
 #define BUFFER_SIZE 512
 #ifndef PI
 #define PI 3.14159265358979323846f
@@ -89,6 +90,7 @@ typedef struct shader_uniforms_struct
 static Audio audio;
 static UI ui;
 static ShaderUniforms shader_uniforms;
+static i32 update_cnt = 0;
 
 // Module functions
 
@@ -113,18 +115,18 @@ int main(int argc, char **argv)
 #if (DEBUG_MODE == 0)
   SetTraceLogLevel(LOG_ERROR | LOG_FATAL | LOG_WARNING);
 #endif
-  SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT); 
+  SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT);
   InitWindow(width, height, "CShaderSound");
   SetWindowMinSize(640, 480);
   SetWindowIcon(LoadImage("icon.png"));
   InitAudioDevice();
   SetMasterVolume(0.5f);
-  SetTargetFPS(GetMonitorRefreshRate(GetCurrentMonitor()));
+  SetTargetFPS(60);
   GuiLoadStyleDark();
   Font font = LoadFontEx("anita_semi_square.ttf", 28, NULL, 0);
   GuiSetFont(font);
   GuiSetStyle(DEFAULT, TEXT_SIZE, 28);
-  GuiSetStyle(LABEL, TEXT_ALIGNMENT, TEXT_ALIGN_CENTER); 
+  GuiSetStyle(LABEL, TEXT_ALIGNMENT, TEXT_ALIGN_CENTER);
   GuiSetIconScale(2);
 
   // Initializing the UI struct
@@ -141,7 +143,7 @@ int main(int argc, char **argv)
   ui.canvas = LoadTextureFromImage(tmp);
   UnloadImage(tmp);
 
-  ui.shader = LoadShader(0, "shaders/test2.frag");
+  ui.shader = LoadShader(0, "shaders/test3.frag");
 
   /*
     uniform vec2 uResolution;
@@ -236,11 +238,12 @@ int main(int argc, char **argv)
       {
         audio.audio_flag++;
       }
-
-      load_audio_buffers();
-      fft();
-      fft_postprocess();
-
+      if (++update_cnt % UPDATE_INTERVAL == 0)
+      {
+        load_audio_buffers();
+        fft();
+        fft_postprocess();
+      }
       BeginDrawing();
       ClearBackground(GetColor(GuiGetStyle(DEFAULT, BACKGROUND_COLOR)));
       BeginShaderMode(ui.shader);
@@ -275,7 +278,7 @@ int main(int argc, char **argv)
 void reload_shader()
 {
   UnloadShader(ui.shader);
-  ui.shader = LoadShader(0, "shaders/test2.frag");
+  ui.shader = LoadShader(0, "shaders/test3.frag");
   shader_uniforms.u_buffer_loc = GetShaderLocation(ui.shader, "uBuffer");
   shader_uniforms.u_resolution_loc = GetShaderLocation(ui.shader, "uResolution");
   shader_uniforms.u_time_loc = GetShaderLocation(ui.shader, "uTime");
@@ -338,7 +341,7 @@ f32 *load_wave_frames(Wave w)
     {
       amp += tmp[w.channels * i + ch] / w.channels;
     }
-    ret[i] = Remap(amp, -1.0f, 1.0f, 0.0f, 1.0f); // Remapping the values to be consistent with the fft
+    ret[i] = amp;
   }
   UnloadWaveSamples(tmp);
   return ret;
@@ -443,8 +446,8 @@ void load_audio_buffers()
   i32 cnt = 0;
   for (u32 i = first_frame; i < n; i++)
   {
-    audio.fft_buffer[cnt] = (audio.music_data[i] + 0.0f * I) * powf(sinf(PI*i/BUFFER_SIZE), 2.0f); // TODO Use a window function
-    unsigned char val = (unsigned char)Remap(audio.music_data[i], 0.0, 1.0, 0.0, 255.0);
+    audio.fft_buffer[cnt] = (audio.music_data[i] + 0.0f * I) * 0.5f * (1.0f - cosf(2.0f * PI * i / BUFFER_SIZE));
+    unsigned char val = (unsigned char)Remap(audio.music_data[i], -1.0, 1.0, 0.0, 255.0);
     audio.pixel_buffer[cnt] = (Color){.r = (unsigned char)0, .g = val, .b = (unsigned char)0, .a = (unsigned char)0};
     cnt++;
   }
@@ -477,28 +480,40 @@ void fft()
   _fft(audio.fft_buffer, out, BUFFER_SIZE, 1);
 }
 
-// Calculates the magnitude of the fft, normalizes it and fills it into u_buffer
+#define SMOOTH_FACTOR 0.1f
+
+// Calculates the magnitude of the fft, normalizes it, and fills it into u_buffer
 void fft_postprocess()
 {
-  f32 max_value = __FLT_MIN__;
-  f32 min_value = __FLT_MAX__;
-  for (u32 i = 0; i < BUFFER_SIZE; i++)
-  {
-    f32 magnitude = c2dB(audio.fft_buffer[i]);
-    if (magnitude > max_value)
-    {
-      max_value = magnitude;
-    }
-    if (magnitude < min_value)
-    {
-      min_value = magnitude;
-    }
-  }
+  // Initialize static variable to store the FFT for smoothing
+  static f32 smoothed_buffer[BUFFER_SIZE] = {0.0f};
+
+  f32 min_value = smoothed_buffer[0];
+  f32 max_value = smoothed_buffer[0];
   for (u32 i = 0; i < BUFFER_SIZE; ++i)
   {
     float tmp = c2dB(audio.fft_buffer[i]);
-    unsigned char val = (unsigned char)Remap(tmp, min_value, max_value, 0.0, 255.0);
+    tmp = isinf(tmp) ? 0.0 : tmp;
+    smoothed_buffer[i] = SMOOTH_FACTOR * tmp + (1.0f - SMOOTH_FACTOR) * smoothed_buffer[i];
+    min_value = fminf(min_value, smoothed_buffer[i]);
+    max_value = fmaxf(max_value, smoothed_buffer[i]);
+  }
+  for (u32 i = (BUFFER_SIZE / 2) - 1; i >= 1; i--)
+{
+    f32 factor = (f32)i / (f32)(BUFFER_SIZE / 2);
+    smoothed_buffer[i * 2] = smoothed_buffer[i];
+    smoothed_buffer[i * 2 + 1] = factor * smoothed_buffer[i] + (1.0f - factor) * smoothed_buffer[i];
+}
+
+  // Update pixel buffer with the remapped values
+  for (u32 i = 0; i < BUFFER_SIZE; ++i)
+  {
+    // Remap using the smoothed values
+    unsigned char val = (unsigned char)Remap(smoothed_buffer[i], min_value, max_value, 0.0, 255.0);
+
+    // Update pixel buffer
     audio.pixel_buffer[i] = (Color){.r = val, .g = audio.pixel_buffer[i].g, .b = (unsigned char)0, .a = (unsigned char)0};
   }
+  // Update shader uniform with the smoothed values
   UpdateTexture(shader_uniforms.u_buffer, audio.pixel_buffer);
 }
