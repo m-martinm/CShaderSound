@@ -15,7 +15,7 @@ float squared ( float value )
 
 float getAmp ( float frequency )
 {
-    return texture ( uBuffer, vec2 ( frequency / 512.0, 0 ) ).x;
+    return texture ( uBuffer, vec2 ( frequency /8192.0, 0 ) ).x;
 }
 
 float getWeight ( float f )

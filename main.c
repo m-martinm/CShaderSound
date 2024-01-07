@@ -21,9 +21,9 @@
 
 // "Settings"
 
-#define DEBUG_MODE 0
+#define DEBUG_MODE 1
 #define UPDATE_INTERVAL 1
-#define BUFFER_SIZE 512
+#define BUFFER_SIZE (1<<13)
 #ifndef PI
 #define PI 3.14159265358979323846f
 #endif
@@ -143,7 +143,7 @@ int main(int argc, char **argv)
   ui.canvas = LoadTextureFromImage(tmp);
   UnloadImage(tmp);
 
-  ui.shader = LoadShader(0, "shaders/test3.frag");
+  ui.shader = LoadShader(0, "shaders/test.frag");
 
   /*
     uniform vec2 uResolution;
@@ -278,7 +278,7 @@ int main(int argc, char **argv)
 void reload_shader()
 {
   UnloadShader(ui.shader);
-  ui.shader = LoadShader(0, "shaders/test3.frag");
+  ui.shader = LoadShader(0, "shaders/test.frag");
   shader_uniforms.u_buffer_loc = GetShaderLocation(ui.shader, "uBuffer");
   shader_uniforms.u_resolution_loc = GetShaderLocation(ui.shader, "uResolution");
   shader_uniforms.u_time_loc = GetShaderLocation(ui.shader, "uTime");
@@ -490,20 +490,23 @@ void fft_postprocess()
 
   f32 min_value = smoothed_buffer[0];
   f32 max_value = smoothed_buffer[0];
+  f32 dt = GetFrameTime();
   for (u32 i = 0; i < BUFFER_SIZE; ++i)
   {
     float tmp = c2dB(audio.fft_buffer[i]);
     tmp = isinf(tmp) ? 0.0 : tmp;
-    smoothed_buffer[i] = SMOOTH_FACTOR * tmp + (1.0f - SMOOTH_FACTOR) * smoothed_buffer[i];
-    min_value = fminf(min_value, smoothed_buffer[i]);
-    max_value = fmaxf(max_value, smoothed_buffer[i]);
+    smoothed_buffer[i] = (tmp - smoothed_buffer[i]) * dt;
+    // min_value = fminf(min_value, smoothed_buffer[i]);
+    // max_value = fmaxf(max_value, smoothed_buffer[i]);
   }
   for (u32 i = (BUFFER_SIZE / 2) - 1; i >= 1; i--)
-{
+  {
     f32 factor = (f32)i / (f32)(BUFFER_SIZE / 2);
     smoothed_buffer[i * 2] = smoothed_buffer[i];
-    smoothed_buffer[i * 2 + 1] = factor * smoothed_buffer[i] + (1.0f - factor) * smoothed_buffer[i];
-}
+    smoothed_buffer[i * 2 + 1] = 0.5f * (smoothed_buffer[i] + smoothed_buffer[i + 1]); // factor * smoothed_buffer[i] + (1.0f - factor) * smoothed_buffer[i+1];
+    min_value = fminf(min_value, smoothed_buffer[i*2]);
+    max_value = fmaxf(max_value, smoothed_buffer[i*2+1]);
+  }
 
   // Update pixel buffer with the remapped values
   for (u32 i = 0; i < BUFFER_SIZE; ++i)
