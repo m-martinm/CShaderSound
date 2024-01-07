@@ -1,6 +1,6 @@
 #version 330
 
-#define ITER 20.0
+#define ITER 30.0
 in vec2 fragTexCoord;
 in vec4 fragColor;
 out vec4 finalColor;
@@ -39,7 +39,7 @@ void main ( void )
     for ( float i = 0.0; i < ITER; i ++ )
     {
         float amp = texture ( uBuffer, vec2 ( i / ITER, 0.0 ) ).x;
-        d = min ( d, sdShape ( uv, vec2 ( i * s + s / 2.0, 0.1 ), vec2 ( i * s + s / 2.0, amp ) ) );
+        d = min ( d, sdShape ( uv, vec2 ( i * s + s / 2.0, 0.1 ), vec2 ( i * s + s / 2.0, 0.1 +clamp(amp , 0.0, 0.9) ) ) );
     }
     vec3 col = palette ( uv.x );
     col = mix ( col, vec3 ( 0.0 ), d );
