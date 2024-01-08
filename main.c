@@ -12,7 +12,6 @@
 #include <math.h>
 #include <complex.h>
 #include <string.h>
-#include <assert.h>
 #include "raylib.h"
 #include "raymath.h"
 #define RAYGUI_IMPLEMENTATION
@@ -116,7 +115,7 @@ static void resize_window();
 static void check_dropped_files();
 static void reload_shader();
 static void fft_prepare();
-static void fft(f32 in[], fcplx out[], u32 stride, u32 n);
+static void fft(f32 *in, fcplx *out, u32 stride, u32 n);
 static void fft_postprocess();
 // static f32 *load_wave_frames();
 // static void load_audio_buffers();
@@ -157,7 +156,7 @@ int main(int argc, char **argv)
   ui.canvas = LoadTextureFromImage(tmp);
   UnloadImage(tmp);
 
-  ui.shader = LoadShader(0, "shaders/test3.frag");
+  ui.shader = LoadShader(0, "shaders/test.frag");
 
   /*
     uniform vec2 uResolution;
@@ -276,6 +275,7 @@ int main(int argc, char **argv)
     }
   }
 
+  DetachAudioStreamProcessor(audio.music.stream, audio_callback);
   UnloadMusicStream(audio.music);
   UnloadFont(font);
   UnloadTexture(ui.canvas);
@@ -289,10 +289,14 @@ int main(int argc, char **argv)
 void reload_shader()
 {
   UnloadShader(ui.shader);
-  ui.shader = LoadShader(0, "shaders/test3.frag");
+  ui.shader = LoadShader(0, "shaders/test.frag");
   shader_uniforms.u_buffer_loc = GetShaderLocation(ui.shader, "uBuffer");
   shader_uniforms.u_resolution_loc = GetShaderLocation(ui.shader, "uResolution");
   shader_uniforms.u_time_loc = GetShaderLocation(ui.shader, "uTime");
+  if (IsShaderReady(ui.shader))
+  {
+    fprintf(stderr, "Shader reloaded!\n");
+  }
 }
 
 void resize_window()
@@ -316,9 +320,10 @@ void resize_window()
 void load_audio(const char *file_path)
 {
   audio.audio_loaded = false;
-  ui.music_name = GetFileNameWithoutExt(file_path);
+  ui.music_name = GetFileNameWithoutExt(file_path); // We can free after this because this uses a static array
   if (IsMusicReady(audio.music))
   {
+    DetachAudioStreamProcessor(audio.music.stream, audio_callback);
     UnloadMusicStream(audio.music);
     memset(audio.pixel_buffer, 0, sizeof(audio.pixel_buffer));
     memset(audio.fft_in, 0, sizeof(audio.fft_in));
@@ -420,7 +425,7 @@ void check_dropped_files()
   }
 }
 
-#define FACTOR (2*(NFFT / BUFFER_SIZE))
+#define FACTOR (2 * (NFFT / BUFFER_SIZE))
 
 // Calculates the magnitude of the fft, normalizes it, and fills it into u_buffer
 void fft_postprocess()
@@ -428,12 +433,13 @@ void fft_postprocess()
 
   f32 min_value = audio.fft_smooth[0];
   f32 max_value = audio.fft_smooth[0];
+
   f32 smoothing_factor = GetFrameTime() * (f32)FACTOR;
   for (u32 i = 0; i < BUFFER_SIZE; ++i) // Only interested in the lower frequency bins
   {
     f32 tmp = c2dB(audio.fft_out[i]);
-    tmp = isinf(tmp) ? 0.0 : tmp; // safety check
-    audio.fft_smooth[i] = tmp * smoothing_factor + (1.0f - smoothing_factor)*audio.fft_smooth[i]; // (tmp - audio.fft_smooth[i]) *smoothing_factor;
+    tmp = isinf(tmp) ? 0.0 : tmp;                                                                   // safety check
+    audio.fft_smooth[i] = tmp * smoothing_factor + (1.0f - smoothing_factor) * audio.fft_smooth[i]; // (tmp - audio.fft_smooth[i]) *smoothing_factor;
     min_value = fminf(min_value, audio.fft_smooth[i]);
     max_value = fmaxf(max_value, audio.fft_smooth[i]);
   }
@@ -498,9 +504,9 @@ void push_buffers(f32 value)
   audio.amp_buffer[BUFFER_SIZE - 1] = value;
 }
 
-void fft(f32 in[], fcplx out[], u32 stride, u32 n)
+// https://github.com/tsoding/musializer, https://rosettacode.org/wiki/Fast_Fourier_transform
+void fft(f32 *in, fcplx *out, u32 stride, u32 n)
 {
-  assert(n > 0);
 
   if (n == 1)
   {
@@ -523,9 +529,11 @@ void fft(f32 in[], fcplx out[], u32 stride, u32 n)
 
 void fft_prepare()
 {
-  for(i32 i = 0; i < NFFT; i++)
+  for (i32 i = 0; i < NFFT; i++)
   {
     audio.fft_in_windowed[i] = 0.5f * (1.0f - cosf(2.0f * PI * i / NFFT)) * audio.fft_in[i];
+    // audio.fft_in_windowed[i] = (0.53836f*(1.0f - 0.53836f)*cosf(2*PI*i/NFFT)) * audio.fft_in[i];
+    // audio.fft_in_windowed[i] = powf(sinf(PI*i/NFFT), 2.0f) * audio.fft_in[i];
   }
 }
 

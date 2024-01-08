@@ -8,3 +8,6 @@ FLAGS = -std=c99 -Wall -pedantic
 
 c_shader_sound: $(SOURCES)
 	gcc $(SOURCES) $(INCLUDES) -$(FLAGS) -o c_shader_sound.exe $(LIBS)
+
+debug : $(SOURCES)
+	gcc $(SOURCES) $(INCLUDES) -$(FLAGS) -ggdb -o c_shader_sound_debug.exe $(LIBS)
