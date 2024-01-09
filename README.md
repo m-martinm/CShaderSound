@@ -1,4 +1,4 @@
-# CShaderSound
+# ![really_cool_icon](icon.png) CShaderSound
 
 CShaderSound is an audio visualizer written in C, utilizing shaders for real-time visualization. It is a small, personal project to try to learn more about shader programming.
 
