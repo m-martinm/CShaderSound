@@ -8,19 +8,13 @@ The [Raylib](https://github.com/raysan5/raylib) and [Raygui](https://github.com/
 ## Usage
 
 You can change some configurations in the __main.c__ file. Then simply compile it. 
-
-```bash
-./c_shader_sound.exe <path-to-filename>
-```
-(Change the file extension based on your system.)
-
-Or simply run the program and drag-and-drop a music file.
+There is a Makefile provided, but it will probably only work with MinGW on Windows.
 
 ## Controls
 
 - Press __SPACE__ to toggle play/pause.
 - Press __R__ to reload shaders. (You can use this program kinda like Shadertoys.)
-- Drop an audio file onto the window to load it.
+- Drop an audio file or shader onto the window to load it.
 
 ---
 This is small project has been inspired by [@Tsoding](https://github.com/tsoding/musializer) and [ShaderToys](https://www.shadertoy.com/).
