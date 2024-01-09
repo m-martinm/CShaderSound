@@ -21,7 +21,7 @@ float sdShape ( in vec2 p, in vec2 a, in vec2 b )
 
 vec3 palette ( in float t )
 {
-    vec3 a = vec3 ( 0.610, 0.498, 0.650 );
+    vec3 a = vec3 ( 0.611, 0.498, 0.650 );
     vec3 b = vec3 ( 0.388, 0.498, 0.350 );
     vec3 c = vec3 ( 0.530, 0.498, 0.620 );
     vec3 d = vec3 ( 3.438, 3.012, 4.025 );

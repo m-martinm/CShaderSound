@@ -33,6 +33,7 @@ For example 1024*5.384 = 5513.216
 #define DEBUG_MODE 0
 #define BUFFER_SIZE 2048
 #define NFFT 8192
+#define MAX_STRING_LEN 256
 #ifndef PI
 #define PI 3.14159265358979323846f
 #endif
@@ -49,8 +50,9 @@ typedef struct ui_struct // Holds information about the UI
 {
   Vector2 window_size;
   Shader shader;
+  char shader_filepath[MAX_STRING_LEN];
   Texture canvas;
-  const char *music_name;
+  char music_name[MAX_STRING_LEN];
   Rectangle canvas_bounds;
   Rectangle music_name_bounds;
   Rectangle stop_play_bounds;
@@ -107,13 +109,12 @@ static ShaderUniforms shader_uniforms;
 void audio_callback(void *bufferData, u32 frames);
 static void push_buffers(f32 value);
 static void load_audio(const char *file_path);
-static void check_dropped_files();
 static void send_shader_uniforms();
 static void ui_draw();
 static void toggle_music_playing();
 static void resize_window();
 static void check_dropped_files();
-static void reload_shader();
+static void reload_shader(const char *file_path);
 static void fft_prepare();
 static void fft(f32 *in, fcplx *out, u32 stride, u32 n);
 static void fft_postprocess();
@@ -126,17 +127,20 @@ int main(int argc, char **argv)
   const u32 width = 75 * 16;
   const u32 height = 75 * 9;
 #if (DEBUG_MODE == 0)
-  SetTraceLogLevel(LOG_ERROR | LOG_FATAL | LOG_WARNING);
+  SetTraceLogLevel(LOG_WARNING);
 #endif
   SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT);
   InitWindow(width, height, "CShaderSound");
-  SetWindowMinSize(640, 480);
-  SetWindowIcon(LoadImage("icon.png"));
+  SetWindowMinSize(16*60, 9*60);
+  Image icon = LoadImage("icon.png");
+  SetWindowIcon(icon);
+  UnloadImage(icon);
   InitAudioDevice();
   SetMasterVolume(0.5f);
   SetTargetFPS(60);
   GuiLoadStyleDark();
-  Font font = LoadFontEx("anita_semi_square.ttf", 28, NULL, 0);
+  const i32 font_size = 28;
+  Font font = LoadFontEx("anita_semi_square.ttf", font_size, NULL, 0);
   GuiSetFont(font);
   GuiSetStyle(DEFAULT, TEXT_SIZE, 28);
   GuiSetStyle(LABEL, TEXT_ALIGNMENT, TEXT_ALIGN_CENTER);
@@ -156,7 +160,8 @@ int main(int argc, char **argv)
   ui.canvas = LoadTextureFromImage(tmp);
   UnloadImage(tmp);
 
-  ui.shader = LoadShader(0, "shaders/test.frag");
+  strcpy(ui.shader_filepath, "shaders/test.frag");
+  ui.shader = LoadShader(0, ui.shader_filepath);
 
   /*
     uniform vec2 uResolution;
@@ -194,7 +199,7 @@ int main(int argc, char **argv)
 
     if (IsKeyPressed(KEY_R))
     {
-      reload_shader();
+      reload_shader(ui.shader_filepath);
     }
 
     if (IsKeyPressed(KEY_SPACE))
@@ -230,7 +235,7 @@ int main(int argc, char **argv)
       }
 
       UpdateMusicStream(audio.music);
-      audio.current_frame = (int)(GetMusicTimePlayed(audio.music) * audio.music.stream.sampleRate);
+      audio.current_frame = (i32)(GetMusicTimePlayed(audio.music) * audio.music.stream.sampleRate);
 
       // queueing music
       if (audio.current_frame == 0 && audio.audio_flag >= 2)
@@ -268,35 +273,51 @@ int main(int argc, char **argv)
     }
     else
     {
+      i32 default_line_spacing = GuiGetStyle(DEFAULT, TEXT_LINE_SPACING);
+      GuiSetStyle(DEFAULT, TEXT_LINE_SPACING, (i32)font_size * 1.5);
       BeginDrawing();
       ClearBackground(GetColor(GuiGetStyle(DEFAULT, BACKGROUND_COLOR)));
-      GuiDrawText("To start playing a music,\nsimply drop the file onto this window!\n", ui.canvas_bounds, TEXT_ALIGN_MIDDLE, RAYWHITE);
+      GuiLabel((Rectangle){.x = 0.f, .y = 0.f, .width = GetScreenWidth(), .height = GetScreenHeight()}, "To start playing music,\n"
+                                                                                                        "simply drop the file onto this window!\n"
+                                                                                                        "You can also load shaders this way.\n"
+                                                                                                        "(Only fragment shaders for now.)\n\n"
+                                                                                                        "Press [ R ] for reloading the current shader.\n"
+                                                                                                        "Pause/Resume music with [ SPACE ].\n");
       EndDrawing();
+      GuiSetStyle(DEFAULT, TEXT_LINE_SPACING, default_line_spacing);
     }
   }
 
-  DetachAudioStreamProcessor(audio.music.stream, audio_callback);
-  UnloadMusicStream(audio.music);
+  if (IsMusicReady(audio.music))
+  {
+    DetachAudioStreamProcessor(audio.music.stream, audio_callback);
+    UnloadMusicStream(audio.music);
+  }
   UnloadFont(font);
   UnloadTexture(ui.canvas);
   UnloadTexture(shader_uniforms.u_buffer);
+  UnloadShader(ui.shader);
   queue_destroy(&ui.music_queue);
   CloseAudioDevice();
   CloseWindow();
   return 0;
 }
 
-void reload_shader()
+void reload_shader(const char *file_path)
 {
+  fprintf(stderr, "Trying to (re)load shader: %s\n", GetFileName(file_path));
   UnloadShader(ui.shader);
-  ui.shader = LoadShader(0, "shaders/test.frag");
+  strcpy(ui.shader_filepath, file_path);
+  ui.shader = LoadShader(0, file_path);
   shader_uniforms.u_buffer_loc = GetShaderLocation(ui.shader, "uBuffer");
   shader_uniforms.u_resolution_loc = GetShaderLocation(ui.shader, "uResolution");
   shader_uniforms.u_time_loc = GetShaderLocation(ui.shader, "uTime");
-  if (IsShaderReady(ui.shader))
-  {
-    fprintf(stderr, "Shader reloaded!\n");
-  }
+  // { // Flashing the screen 
+  //   BeginDrawing();
+  //   DrawRectangleLinesEx((Rectangle){0, 0, GetScreenWidth(), GetScreenHeight()}, 5.0f, GetColor(0x80FFDBFF));
+  //   EndDrawing();
+  //   WaitTime(0.1);
+  // }
 }
 
 void resize_window()
@@ -316,11 +337,10 @@ void resize_window()
 }
 
 // Wrapper around LoadMusicStream()
-// NOTE: No error checking yet (TODO)
 void load_audio(const char *file_path)
 {
   audio.audio_loaded = false;
-  ui.music_name = GetFileNameWithoutExt(file_path); // We can free after this because this uses a static array
+  strcpy(ui.music_name, GetFileNameWithoutExt(file_path));
   if (IsMusicReady(audio.music))
   {
     DetachAudioStreamProcessor(audio.music.stream, audio_callback);
@@ -333,8 +353,15 @@ void load_audio(const char *file_path)
   }
   audio.music = LoadMusicStream(file_path);
   audio.music.looping = false;
+  f32 time_waited = 0.0f;
+  f32 max_wait_time = 5.0f;
   while (!IsMusicReady(audio.music))
   { // Wait for music to be initialized
+    if ((time_waited += GetFrameTime()) > max_wait_time)
+    {
+      fprintf(stderr, "Maximum wait time [%f] for music [%s] loading exceeded!\nPlease try again!\n", max_wait_time, file_path);
+      return;
+    }
   }
   audio.audio_loaded = true;
   audio.audio_flag = 0;
@@ -407,14 +434,48 @@ void toggle_music_playing()
 // Checks if files are dropped and loads the first one if there is no music playing.
 void check_dropped_files()
 {
+  static const char *supported_music_extensions[] = {".mp3", ".ogg", ".wav", ".qoa", ".xm", ".mod"};
+  static const char *supported_fragment_shader_extensions[] = {".frag", ".fs", ".glsl", ".fsdr", ".fsh", ".fragment"};
+  static const i32 se_cnt = 6;
   if (IsFileDropped())
   {
     FilePathList fp = LoadDroppedFiles();
     for (i32 i = 0; i < fp.count; i++)
     {
-      enqueue(&ui.music_queue, fp.paths[i]);
+      const char *ext = GetFileExtension(fp.paths[i]);
+      bool valid_extension = false;
+      for (i32 j = 0; j < se_cnt; j++)
+      {
+        if (strcmp(ext, supported_music_extensions[j]) == 0)
+        {
+          enqueue(&ui.music_queue, fp.paths[i]);
+          fprintf(stderr, "Queued: %s\n", GetFileName(fp.paths[i]));
+          valid_extension = true;
+          break;
+        }
+        else if (strcmp(ext, supported_fragment_shader_extensions[j]) == 0)
+        {
+          reload_shader(fp.paths[i]);
+          valid_extension = true;
+          break;
+        }
+      }
+      if (!valid_extension)
+      {
+        fprintf(stderr, "Unsupported file extension [%s] for fragment shaders or audio files!\n", ext);
+        fprintf(stderr, "Supported file extensions for fragment shaders:\n");
+        for (i32 j = 0; j < se_cnt; j++)
+        {
+          fprintf(stderr, "%s\t", supported_fragment_shader_extensions[j]);
+        }
+        fprintf(stderr, "\nSupported file extensions for audio files:\n");
+        for (i32 j = 0; j < se_cnt; j++)
+        {
+          fprintf(stderr, "%s\t", supported_music_extensions[j]);
+        }
+        fprintf(stderr, "\n");
+      }
     }
-    queue_print(&ui.music_queue);
     if (!IsMusicReady(audio.music) && !queue_is_empty(&ui.music_queue))
     {
       char *data = dequeue(&ui.music_queue);
@@ -504,7 +565,7 @@ void push_buffers(f32 value)
   audio.amp_buffer[BUFFER_SIZE - 1] = value;
 }
 
-// https://github.com/tsoding/musializer, https://rosettacode.org/wiki/Fast_Fourier_transform
+// from: https://github.com/tsoding/musializer and https://rosettacode.org/wiki/Fast_Fourier_transform
 void fft(f32 *in, fcplx *out, u32 stride, u32 n)
 {
 
@@ -536,72 +597,3 @@ void fft_prepare()
     // audio.fft_in_windowed[i] = powf(sinf(PI*i/NFFT), 2.0f) * audio.fft_in[i];
   }
 }
-
-// Wrapper around LoadWaveSamples()
-// f32 *load_wave_frames(Wave w)
-// {
-//   f32 *tmp = LoadWaveSamples(w);
-//   f32 *ret = (f32 *)malloc(sizeof(f32) * w.frameCount);
-//   for (u32 i = 0; i < w.frameCount; i++)
-//   {
-//     f32 amp = 0.0f;
-//     for (u32 ch = 0; ch < w.channels; ch++)
-//     {
-//       amp += tmp[w.channels * i + ch] / w.channels;
-//     }
-//     ret[i] = amp;
-//   }
-//   UnloadWaveSamples(tmp);
-//   return ret;
-// }
-
-// void load_audio_buffers()
-// {
-//   u32 n;
-//   u32 first_frame;
-//   if (audio.current_frame + BUFFER_SIZE > audio.music.frameCount)
-//   {
-//     n = audio.music.frameCount;
-//     first_frame = n - BUFFER_SIZE;
-//   }
-//   else
-//   {
-//     first_frame = audio.current_frame;
-//     n = audio.current_frame + BUFFER_SIZE;
-//   }
-//   i32 cnt = 0;
-//   for (u32 i = first_frame; i < n; i++)
-//   {
-//     audio.fft_buffer[cnt] = (audio.music_data[i] + 0.0f * I) * 0.5f * (1.0f - cosf(2.0f * PI * i / BUFFER_SIZE));
-//     unsigned char val = (unsigned char)Remap(audio.music_data[i], -1.0, 1.0, 0.0, 255.0);
-//     audio.pixel_buffer[cnt] = (Color){.r = (unsigned char)0, .g = val, .b = (unsigned char)0, .a = (unsigned char)0};
-//     cnt++;
-//   }
-// }
-
-// void _fft(fcplx *buf, fcplx *out, u32 n, u32 step)
-// {
-//   if (step < n)
-//   {
-//     _fft(out, buf, n, step * 2);
-//     _fft(out + step, buf + step, n, step * 2);
-
-//     for (i32 i = 0; i < n; i += 2 * step)
-//     {
-//       fcplx t = cexpf(-I * PI * i / n) * out[i + step];
-//       buf[i / 2] = out[i] + t;
-//       buf[(i + n) / 2] = out[i] - t;
-//     }
-//   }
-// }
-
-// // https://rosettacode.org/wiki/Fast_Fourier_transform#C with slight modifications
-// void fft()
-// {
-//   fcplx out[FFT_SIZE]; // Could be dynamically allocated but with small buffer sizes it should work
-//   for (i32 i = 0; i < FFT_SIZE; ++i)
-//   {
-//     out[i] = audio.fft_buffer[i];
-//   }
-//   _fft(audio.fft_buffer, out, FFT_SIZE, 1);
-// }
