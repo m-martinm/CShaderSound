@@ -4,7 +4,12 @@
 SOURCES = main.c
 INCLUDES = -Iraylib/raylib-5.0/src -Iraylib/raygui-4.0/src
 LIBS = -L$(CURDIR)/raylib/raylib-5.0/src -lraylib -lopengl32 -lgdi32 -lwinmm -lm
+# For linux sth like this:
+# LIBS -L$(CURDIR)/raylib/raylib-5.0/src -lraylib -lGL -lc -lm -lpthread -ldl -lrt (-lX11 also probably)
 FLAGS = -std=c99 -Wall -pedantic
 
 c_shader_sound: $(SOURCES)
-	gcc $(SOURCES) $(INCLUDES) -$(FLAGS) -o c_shader_sound.exe $(LIBS)
+	gcc $(SOURCES) $(INCLUDES) -$(FLAGS) -o CShaderSound.exe $(LIBS)
+
+debug : $(SOURCES)
+	gcc $(SOURCES) $(INCLUDES) -$(FLAGS) -ggdb -o c_shader_sound_debug.exe $(LIBS)

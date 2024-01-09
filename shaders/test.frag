@@ -8,19 +8,24 @@ uniform vec2 uResolution;
 uniform float uTime;
 uniform sampler2D uBuffer;
 
-float squared ( float value )
+float sq ( float value )
 {
     return value * value;
 }
 
-float getAmp ( float frequency )
+float get_amp ( float frequency )
 {
-    return texture ( uBuffer, vec2 ( frequency /8192.0, 0 ) ).x;
+    return texture ( uBuffer, vec2 ( frequency / 2048.0, 0 ) ).x;
 }
 
-float getWeight ( float f )
+float get_weight ( float f )
 {
-    return ( getAmp ( f - 2.0 ) + getAmp ( f - 1.0 ) + getAmp ( f + 2.0 ) + getAmp ( f + 1.0 ) + getAmp ( f ) ) / 5.0;
+    float ret = 0.0;
+    for ( float i = 0; i < 400.0; i += 10.0 )
+    {
+        ret += get_amp ( f + i );
+    }
+    return ret / 40.0;
 }
 
 void main ( void )
@@ -35,14 +40,11 @@ void main ( void )
     for ( float i = 0.0; i < 5.0; i ++ )
     {
 
-        uv.y += ( 0.2 * sin ( uv.x + i / 7.0 - uTime * 0.6 ) );
-        float Y = uv.y + getWeight ( squared ( i ) * 20.0 ) *
-            ( texture ( uBuffer, vec2 ( uvTrue.x, 0 ) ).y - 0.5 );
-        lineIntensity = 0.4 + squared ( 1.6 * abs ( mod ( uvTrue.x + i / 1.3 + uTime, 2.0 ) - 1.0 ) );
-        lineIntensity *= 0.5;
-        glowWidth = abs ( lineIntensity / ( 150.0 * Y ) );
-        glowWidth *= 0.7;
-        color += vec3 ( glowWidth * ( 2.0 + sin ( uTime * 0.13 ) ), glowWidth * ( 2.0 - sin ( uTime * 0.23 ) ), glowWidth * ( 2.0 - cos ( uTime * 0.19 ) ) );
+        uv.y += ( 0.125 * sin ( uv.x + i / 5.0 - uTime * 0.5 ) );
+        float Y = uv.y + get_weight ( i * 400.0 ) * ( 0.5 * texture ( uBuffer, vec2 ( uvTrue.x, 1.0 ) ).y - 0.5 );
+        lineIntensity = 0.5 + sq ( abs ( mod ( uvTrue.x + i / 1.3 + uTime, 2.0 ) - 1.0 ) );
+        glowWidth = abs ( lineIntensity / ( 200.0 * Y ) );
+        color += vec3 ( glowWidth * ( 2.0 + sin ( uTime * 0.10 ) ), glowWidth * ( 2.0 - sin ( uTime * 0.20 ) ), glowWidth * ( 2.0 - cos ( uTime * 0.30 ) ) );
     }
 
     finalColor = vec4 ( color, 1.0 );

@@ -1,3 +1,11 @@
+// ported from: https://www.shadertoy.com/view/Mlj3WV
+/*
+2D LED Spectrum - Visualiser
+Based on Led Spectrum Analyser by: simesgreen - 27th February, 2013 https://www.shadertoy.com/view/Msl3zr
+2D LED Spectrum by: uNiversal - 27th May, 2015
+Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+*/
+
 #version 330
 
 in vec2 fragTexCoord;
@@ -12,7 +20,7 @@ void main ( )
 {
     vec2 uv = fragTexCoord;
 
-    const float bands = 30.0;
+    const float bands = 40.0;
     const float segs = 40.0;
     vec2 p;
     p.x = floor ( uv.x * bands ) / bands;
