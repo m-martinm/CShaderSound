@@ -131,7 +131,7 @@ int main(int argc, char **argv)
 #endif
   SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT | FLAG_VSYNC_HINT);
   InitWindow(width, height, "CShaderSound");
-  SetWindowMinSize(16*60, 9*60);
+  SetWindowMinSize(16 * 60, 9 * 60);
   Image icon = LoadImage("icon.png");
   SetWindowIcon(icon);
   UnloadImage(icon);
@@ -312,7 +312,7 @@ void reload_shader(const char *file_path)
   shader_uniforms.u_buffer_loc = GetShaderLocation(ui.shader, "uBuffer");
   shader_uniforms.u_resolution_loc = GetShaderLocation(ui.shader, "uResolution");
   shader_uniforms.u_time_loc = GetShaderLocation(ui.shader, "uTime");
-  // { // Flashing the screen 
+  // { // Flashing the screen
   //   BeginDrawing();
   //   DrawRectangleLinesEx((Rectangle){0, 0, GetScreenWidth(), GetScreenHeight()}, 5.0f, GetColor(0x80FFDBFF));
   //   EndDrawing();
@@ -353,16 +353,16 @@ void load_audio(const char *file_path)
   }
   audio.music = LoadMusicStream(file_path);
   audio.music.looping = false;
-  f32 time_waited = 0.0f;
-  f32 max_wait_time = 5.0f;
-  while (!IsMusicReady(audio.music))
-  { // Wait for music to be initialized
-    if ((time_waited += GetFrameTime()) > max_wait_time)
-    {
-      fprintf(stderr, "Maximum wait time [%f] for music [%s] loading exceeded!\nPlease try again!\n", max_wait_time, file_path);
-      return;
-    }
-  }
+  // f32 time_waited = 0.0f;
+  // f32 max_wait_time = 5.0f;
+  // while (!IsMusicReady(audio.music)) // TODO Somekind of error checking if the music couldn't be loaded, but maybe raylib takes care of it
+  // { // Wait for music to be initialized
+  // if ((time_waited += GetFrameTime()) > max_wait_time)
+  // {
+  //   fprintf(stderr, "Maximum wait time [%f] for music [%s] loading exceeded!\nPlease try again!\n", max_wait_time, file_path);
+  //   return;
+  // }
+  // }
   audio.audio_loaded = true;
   audio.audio_flag = 0;
   audio.current_frame = 0;
